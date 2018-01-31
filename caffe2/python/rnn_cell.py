@@ -915,40 +915,41 @@ class MultiRNNCell(RNNCell):
 
         layer_input = input_t
         for i, layer_cell in enumerate(self.cells):
-            num_states = states_per_layer[i]
-            layer_states = states[states_index:(states_index + num_states)]
-            states_index += num_states
+            with core.NameScope("layer_{}".format(i)):
+                num_states = states_per_layer[i]
+                layer_states = states[states_index:(states_index + num_states)]
+                states_index += num_states
 
-            if i > 0:
-                prepared_input = layer_cell.prepare_input(model, layer_input)
-            else:
-                prepared_input = layer_input
-
-            layer_next_states = layer_cell._apply(
-                model,
-                prepared_input,
-                seq_lengths,
-                layer_states,
-                timestep,
-                extra_inputs=(None if i > 0 else extra_inputs),
-            )
-            # Since we're using here non-public method _apply, instead of apply,
-            # we have to manually extract output from states
-            if i != len(self.cells) - 1:
-                layer_output = layer_cell._prepare_output(
-                    model,
-                    layer_next_states,
-                )
-                if i > 0 and i in self.residual_output_layers:
-                    layer_input = brew.sum(
-                        model,
-                        [layer_output, layer_input],
-                        self.scope('residual_output_{}'.format(i)),
-                    )
+                if i > 0:
+                    prepared_input = layer_cell.prepare_input(model, layer_input)
                 else:
-                    layer_input = layer_output
+                    prepared_input = layer_input
 
-            next_states.extend(layer_next_states)
+                layer_next_states = layer_cell._apply(
+                    model,
+                    prepared_input,
+                    seq_lengths,
+                    layer_states,
+                    timestep,
+                    extra_inputs=(None if i > 0 else extra_inputs),
+                )
+                # Since we're using here non-public method _apply, instead of apply,
+                # we have to manually extract output from states
+                if i != len(self.cells) - 1:
+                    layer_output = layer_cell._prepare_output(
+                        model,
+                        layer_next_states,
+                    )
+                    if i > 0 and i in self.residual_output_layers:
+                        layer_input = brew.sum(
+                            model,
+                            [layer_output, layer_input],
+                            self.scope('residual_output_{}'.format(i)),
+                        )
+                    else:
+                        layer_input = layer_output
+
+                next_states.extend(layer_next_states)
         return next_states
 
     def get_state_names(self):
