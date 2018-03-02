@@ -95,6 +95,11 @@ struct TypeNameRegisterer {
   }
 };
 
+template <typename T>
+struct TypeIdBit {
+  static bool bit;
+};
+
 /**
  * TypeMeta is a thin class that allows us to store the type of a container such
  * as a blob, or the data type of a tensor, with a unique run-time id. It also
@@ -207,7 +212,9 @@ class TypeMeta {
    * is generated during run-time. Do NOT serialize the id for storage.
    */
   template <typename T>
-  CAFFE2_API static CaffeTypeId Id();
+  static constexpr CaffeTypeId Id() {
+    return reinterpret_cast<CaffeTypeId>(&TypeIdBit<T>::bit);
+  }
 
   /**
    * Returns the item size of the type. This is equivalent to sizeof(T).
@@ -332,23 +339,19 @@ class TypeMeta {
 // and as a result, we define these two macros slightly differently.
 
 #ifdef _MSC_VER
-#define CAFFE_KNOWN_TYPE(T)                              \
-  template <>                                            \
-  CAFFE2_EXPORT CaffeTypeId TypeMeta::Id<T>() {          \
-    static bool type_id_bit[1];                          \
-    static TypeNameRegisterer<T> registerer(             \
-        reinterpret_cast<CaffeTypeId>(type_id_bit), #T); \
-    return reinterpret_cast<CaffeTypeId>(type_id_bit);   \
-  }
+#define CAFFE_KNOWN_TYPE(T)                          \
+  template <>                                        \
+  CAFFE2_EXPORT bool TypeIdBit<T>::bit =             \
+      (TypeNameRegisterer<T>(TypeMeta::Id<T>(), #T), \
+       false /* just init the variable */            \
+      );
 #else // _MSC_VER
-#define CAFFE_KNOWN_TYPE(T)                              \
-  template <>                                            \
-  CaffeTypeId TypeMeta::Id<T>() {                        \
-    static bool type_id_bit[1];                          \
-    static TypeNameRegisterer<T> registerer(             \
-        reinterpret_cast<CaffeTypeId>(type_id_bit), #T); \
-    return reinterpret_cast<CaffeTypeId>(type_id_bit);   \
-  }
+#define CAFFE_KNOWN_TYPE(T)                          \
+  template <>                                        \
+  bool TypeIdBit<T>::bit =                           \
+      (TypeNameRegisterer<T>(TypeMeta::Id<T>(), #T), \
+       false /* just init the variable */            \
+      );
 #endif
 
 } // namespace caffe2
